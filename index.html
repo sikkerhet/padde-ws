@@ -1,0 +1,473 @@
+
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UiO-CERT PADDE</title>
+<style>
+:root {
+  --background-color: #f0f0f0;
+  --text-color: #333;
+  --link-color: #000;
+  --border-color: #d0d0d0;
+  --th-background-color: #d2d2d2;
+  --input-focus-border-color: black;
+  --button-background-color: #d0d0d0;
+  --processing-overlay-background-color: rgba(0, 0, 0, 0.5);
+  --notfound-overlay-background-color: rgba(255, 0, 0, 0.8);
+  --processing-message-color: white;
+  --notfound-message-color: black;
+}
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  line-height: 1.6;
+  margin: 0;
+  padding: 20px;
+}
+
+h1, p {
+  margin: 0;
+}
+
+p {
+  margin-left: auto;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+a {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: var(--link-color);
+  text-decoration: none;
+}
+
+table {
+  border-collapse: collapse;
+  width: 90%;
+  font-size: 12px;
+  overflow-wrap: break-word;
+  table-layout: auto;
+  border-radius: 10px;
+}
+
+th, td {
+  border: 4px solid var(--border-color);
+  padding: 4px;
+  text-align: left;
+  outline: none;
+}
+
+td:focus {
+  background-color: var(--border-color);
+  outline: none;
+}
+
+th {
+  background-color: var(--th-background-color);
+}
+
+input[type=text], input[type=number] {
+  background-color: var(--background-color);
+  border: none;
+  border-bottom: 4px solid var(--border-color);
+  caret-shape: underscore;
+  caret-color: red;
+}
+
+input[type=text]:focus, input[type=number]:focus {
+  outline: none;
+  border-bottom: 4px solid var(--input-focus-border-color);
+}
+
+.button {
+  background-color: var(--button-background-color);
+  border: none;
+  color: var(--text-color);
+  padding: 5px 5px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 12px;
+  margin: 2px 2px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.buttongear {
+  background-color: var(--background-color);
+  border: none;
+  color: var(--text-color);
+  text-align: left;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.container {
+  display: flex;
+}
+
+.form {
+  font-size: 12px;
+  margin: 4px 4px;
+  color: var(--text-color);
+  padding: 4px 4px;
+  display: inline-block;
+}
+
+#processing-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--processing-overlay-background-color);
+  z-index: 1000;
+  display: none;
+}
+
+#processing-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 40px;
+  color: var(--processing-message-color);
+  text-align: center;
+}
+
+#notfound-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--notfound-overlay-background-color);
+  z-index: 1000;
+  display: none;
+}
+
+#notfound-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 40px;
+  color: var(--notfound--message-color);
+  text-align: center;
+}
+</style>
+
+</head>
+
+<body>
+     <div class="container">
+	<a href="."><h1> PADDE</h1></a><img src="./logo" width="50" height="50">
+	<p style="font-size: 10px;">Passive Aggressive Dns Done Easy...beta</p>
+    </div>
+    <form class="form" id="search-form">
+        <label for="q"></label>
+        <input type="text" id="q" name="q" style="width: 350px;" title="Search the query or answer fields, % is wildcard">
+        <button class="button"type="submit">Search</button>
+	<button class="buttongear" id="toggle-button">⚙</button>
+	<div id="form-fields" style="display: none;">
+        <label for="start">Start:</label>
+        <input type="text" id="start" name="start" title="Start time in unixtime">
+        <label for="stop">Stop:</label>
+        <input type="text" id="stop" name="stop" title="Stop time in unixtime">
+        <label for="max">Limit:</label>
+        <input type="number" id="max" name="max" value="30" min="1" title="Max number of returned lines">
+        <label for="type">Type:</label>
+        <input type="text" id="type" name="type" value="A,AAAA,MX,CNAME" title="Query types, multiple types allowed eg. A,TXT">
+	</div>
+    </form>
+    <br>
+    <div id="output"></div>
+    <div id="footer"></div>
+    <br>
+    <a href="https://www.uio.no/tjenester/it/sikkerhet/cert/" style="position: absolute; bottom: 10; left: 10; font-size: 10px;">UiO-CERT</a>
+
+<script>
+function convertDateTimeToUnixTime(dateTimeInput) {
+	const selectedDateTime = new Date(dateTimeInput.value);
+	const unixTime = Math.floor(selectedDateTime.getTime() / 1000);
+	return unixTime;
+}
+
+
+// Function to check if the given string is a valid IPv4 address
+function isValidIPv4Address(ip) {
+  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  return ipRegex.test(ip);
+}
+
+// Function to check if the given string is a domain name
+function isValidDomainName(domain) {
+  const domainRegex = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/;
+  return domainRegex.test(domain);
+}
+
+function updateInputField(inputField) {
+  const inputValue = inputField.value;
+
+  if (isValidIPv4Address(inputValue)) {
+    const ipParts = inputValue.split('.');
+    ipParts[3] = '%';
+    inputField.value = ipParts.join('.');
+  } else if (isValidDomainName(inputValue)) {
+    const domainParts = inputValue.split('.');
+    domainParts[0] = '%';
+    inputField.value = domainParts.join('.');
+  }
+}
+
+// Function to make doubleclick on search field - blank it. Singleclick change last octet or first part of domainname with %
+function initSearchField(inputFieldId) {
+  const inputField = document.getElementById(inputFieldId);
+
+  let clickTimer;
+
+  inputField.addEventListener('click', (event) => {
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+      updateInputField(inputField);
+    }, 300);
+  });
+
+  inputField.addEventListener('dblclick', (event) => {
+    clearTimeout(clickTimer);
+    inputField.value = '';
+  });
+}
+
+initSearchField('q');
+
+
+// Button to show/hide advanced functions
+document.getElementById("toggle-button").addEventListener("click", function() {
+    event.preventDefault();
+    const formFields = document.getElementById("form-fields");
+    if (formFields.style.display === "none") {
+      formFields.style.display = "block";
+    } else {
+      formFields.style.display = "none";
+    }
+  });
+
+// Search function
+document.getElementById("search-form").addEventListener("submit", async function (event) {
+	event.preventDefault();
+        let q = document.getElementById("q").value;
+        let a = document.getElementById("q").value;
+        const start = document.getElementById("start").value;
+        const stop = document.getElementById("stop").value;
+        const max = document.getElementById("max").value;
+        const type = document.getElementById("type").value;
+
+	/* Error message if no query given */
+        if (!q && !a) {
+            /* alert("Please provide a query."); */ 
+            output.innerHTML = "";
+            footer.innerHTML = "";
+            return;
+        }
+
+	/* Remove leading and trailing space */
+	q = q.trim();
+	a = a.trim();
+	if (!q.includes(":") && !q.includes(".")) {
+		const wq = "%" + q + "%";
+		a = wq;
+		q = wq;
+	}
+
+	/* Build query url */
+        let url = "/search?";
+        if (q) url += "q=" + encodeURIComponent(q);
+        if (a) url += (q ? "&" : "") + "a=" + encodeURIComponent(a);
+        if (start) url += "&start=" + encodeURIComponent(start);
+        if (stop) url += "&stop=" + encodeURIComponent(stop);
+        if (max) url += "&max=" + encodeURIComponent(max);
+        if (type) url += "&type=" + encodeURIComponent(type);
+
+	/* Display processing message */
+	const processingOverlay = document.getElementById("processing-overlay");
+	processingOverlay.style.display = "block";
+
+	/* Fetch data from backend */
+        const response = await fetch(url);
+        const data = await response.json();
+
+	/* Remove the processing message */
+	processingOverlay.style.display = "none";
+
+	output.innerHTML = "";
+	footer.innerHTML = "";
+        displayResults(data,url);
+});
+
+// Display data from query
+function displayResults(data,url) {
+	const output = document.getElementById("output");
+	output.innerHTML = "";
+
+	// Flash NOT FOUND overlay if empty result
+	if (!data || !data.data || !data.data.length) {
+		const notfoundOverlay = document.getElementById("notfound-overlay");
+		notfoundOverlay.style.display = "block";
+                output.innerHTML = "";
+                footer.innerHTML = "";
+		setTimeout(() => {
+		    notfoundOverlay.style.display = "none";
+		}, 500); 
+		return;
+	}
+
+	const table = document.createElement("table");
+	const thead = document.createElement("thead");
+	const headerRow = document.createElement("tr");
+	const headers = ["Query", "Answer", "QType", "First", "Last", "Count"];
+	const sortKeys = ["query", "answer", "qtype", "first", "last", "count"];
+
+	// Add click event on table headers
+	for (let i = 0; i < headers.length; i++) {
+		const th = document.createElement("th");
+		th.textContent = headers[i];
+		th.dataset.sortKey = sortKeys[i];
+		th.addEventListener("click", () => sortTable(i));
+		headerRow.appendChild(th);
+	}
+	thead.appendChild(headerRow);
+	table.appendChild(thead);
+
+	// Build table
+	const tbody = document.createElement("tbody");
+	for (const record of data.data) {
+		const row = document.createElement("tr");
+
+                // Make query and answer cell clickable
+                const queryCell = document.createElement("td");
+                queryCell.textContent = record.query;
+                queryCell.setAttribute('tabindex', '0');
+                queryCell.classList.add('clickable-cell');
+                queryCell.addEventListener('click', () => {
+                        document.getElementById('q').value = record.query;
+                });
+                row.appendChild(queryCell);
+
+                const answerCell = document.createElement("td");
+                answerCell.textContent = record.answer;
+                answerCell.setAttribute('tabindex', '0');
+                answerCell.classList.add('clickable-cell');
+                answerCell.addEventListener('click', () => {
+                        document.getElementById('q').value = record.answer;
+                });
+                row.appendChild(answerCell);
+
+
+		const qtypeCell = document.createElement("td");
+		qtypeCell.textContent = record.qtype;
+		row.appendChild(qtypeCell);
+
+		const firstCell = document.createElement("td");
+		const firstDate = new Date(record.first * 1000);
+		firstCell.textContent = formatDate(firstDate);
+		row.appendChild(firstCell);
+
+		const lastCell = document.createElement("td");
+		const lastDate = new Date(record.last * 1000);
+		lastCell.textContent = formatDate(lastDate);
+		row.appendChild(lastCell);
+
+		const countCell = document.createElement("td");
+		countCell.textContent = record.count;
+		row.appendChild(countCell);
+
+		tbody.appendChild(row);
+	}
+	table.appendChild(tbody);
+	output.appendChild(table);
+
+	// Function to trigger search on ENTER press on table
+	table.addEventListener('keydown', function(event) {
+	    if (event.key === 'Enter') {
+			event.preventDefault();
+			event.stopPropagation();
+			document.getElementById('q').value = event.target.textContent;
+			document.getElementById("search-form").dispatchEvent(new Event('submit', { cancelable: true }));
+	    }
+	});
+
+
+	// Add link to JSON
+	const rawBackendQueryLink = document.createElement("a");
+	rawBackendQueryLink.href = url;
+	rawBackendQueryLink.textContent = "⇩";
+	rawBackendQueryLink.style.display = "block";
+        footer.innerHTML = "";
+	footer.appendChild(rawBackendQueryLink);
+
+	// Function to sort table on header click
+	let sortOrder = {}; // Keeps track of the sort state for each column
+	function sortTable(colIndex) {
+	    const tbody = document.querySelector("tbody");
+	    const rows = Array.from(tbody.querySelectorAll("tr"));
+    
+	    // Toggle the sort order for the column or set it to 'asc' if not previously sorted
+	    sortOrder[colIndex] = sortOrder[colIndex] === 'asc' ? 'desc' : 'asc';
+
+	    rows.sort((rowA, rowB) => {
+		const a = rowA.querySelector(`td:nth-child(${colIndex + 1})`).textContent;
+		const b = rowB.querySelector(`td:nth-child(${colIndex + 1})`).textContent;
+		let result;
+
+		if (colIndex === 0 || colIndex === 1 || colIndex === 2) {
+		    result = a.localeCompare(b, "no", { sensitivity: "base" });
+		} else if (colIndex === 3 || colIndex === 4) {
+		    const dateA = new Date(a.split('/').reverse().join('-')).getTime();
+		    const dateB = new Date(b.split('/').reverse().join('-')).getTime();
+		    result = dateA - dateB;
+		} else {
+		    result = parseInt(a) - parseInt(b);
+		}
+
+		// Reverse the result if the current sort order is 'desc'
+		return sortOrder[colIndex] === 'desc' ? -result : result;
+	    });
+
+	    for (const row of rows) {
+		tbody.appendChild(row);
+	    }
+	}
+
+
+	// Change from unixtime to dateformat 
+	function formatDate(date) {
+		const pad = (n) => (n < 10 ? '0' + n : n);
+		const year = date.getFullYear();
+		const month = pad(date.getMonth() + 1); // Months are zero-based
+		const day = pad(date.getDate());
+		const hour = pad(date.getHours());
+		const minute = pad(date.getMinutes());
+		const second = pad(date.getSeconds());
+		return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+	}
+
+}
+</script>
+
+<div id="processing-overlay">
+  <div id="processing-message">Processing...</div>
+</div>
+
+<div id="notfound-overlay">
+  <div id="notfound-message">Not found!</div>
+</div>
+
+</body>
+</html>
+
