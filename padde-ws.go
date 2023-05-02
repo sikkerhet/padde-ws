@@ -99,6 +99,7 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := r.URL.Query().Get("start")
 	stopTime := r.URL.Query().Get("stop")
 	max := r.URL.Query().Get("max")
+	ilike := r.URL.Query().Get("ilike")
 
 	if max == "" {
 		max = "20"
@@ -168,6 +169,14 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 		limit = 2000
 	}
 	args = append(args, limit)
+
+	if !strings.Contains(queryQuery, "%") && !strings.Contains(answerQuery, "%") {
+		query = strings.ReplaceAll(query, "like", "=")
+	}
+
+	if ilike != "" {
+		query = strings.ReplaceAll(query, "like", "ilike")
+	}
 
 	var records []Record
 	err = db.Select(&records, query, args...)
